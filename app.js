@@ -1,10 +1,12 @@
-require('dotenv').config();
+require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
-const encrypt = require("mongoose-encryption"); 
+const encrypt = require("mongoose-encryption");
 const md5 = require("md5");
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 
 const app = express();
 
@@ -19,7 +21,6 @@ const userSchema = new mongoose.Schema({
   password: String,
 });
 
-
 /////////////////////////////////////applying securtiy ...////////////////////////////////////////
 
 //level 1: by storing email with password in database;
@@ -29,6 +30,8 @@ const userSchema = new mongoose.Schema({
 // userSchema.plugin(encrypt,{secret : process.env.SECRETKEY , encryptedFields : ["password"]});
 
 //level 3: by using hash..here md5 hash
+
+//level 4 : add salting + bcrypt
 
 const User = new mongoose.model("User", userSchema);
 
@@ -43,39 +46,44 @@ app.get("/register", function (req, res) {
   res.render("register");
 });
 
-app.post("/login", function(req,res) {
-    const userName = req.body.username;
-    const passWord = md5(req.body.password);
-    
-    User.findOne({email : userName} , function(err , result) {
-        if(err) {
-            console.log(err); 
-            res.redirect("login");
+app.post("/login", function (req, res) {
+  const userName = req.body.username;
+  const passWord = req.body.password;
+
+  User.findOne({ email: userName }, function (err, result) {
+    if (err) {
+      console.log(err);
+      res.redirect("login");
+    } else {
+      bcrypt.compare(passWord, result.password, function (err, matched) {
+        if (matched) {
+          res.render("secrets");
         } else {
-            if( result.password === passWord) {
-                res.render("secrets");
-            } else {
-                res.redirect("login");
-               
-            }
+          res.render("login");
         }
-
-    })
-
+      });
+    }
+  });
 });
 
 app.post("/register", function (req, res) {
-  const userName = req.body.username;
-  const passWord = md5(req.body.password);
-  const newUser = new User({
-    email: userName,
-    password: passWord,
-  });
-  newUser.save(function (err) {
+  bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
     if (err) {
       console.log(err);
     } else {
-      res.render("secrets");
+      const userName = req.body.username;
+      const passWord = hash;
+      const newUser = new User({
+        email: userName,
+        password: passWord,
+      });
+      newUser.save(function (err) {
+        if (err) {
+          console.log(err);
+        } else {
+          res.render("secrets");
+        }
+      });
     }
   });
 });
